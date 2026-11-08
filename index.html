@@ -532,41 +532,92 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- РЕНДЕРИНГ И УТИЛИТЫ (Без изменений) ---
 
-    function renderPosts(postsToRender) {
-        articlesContainer.innerHTML = '';
-        if (postsToRender.length === 0) {
-            articlesContainer.innerHTML = '<div class="loading-state">Ничего нет.</div>'; return;
+   // Глобальная переменная для хранения текущего открытого поста (если нужно)
+let currentFullPost = null;
+
+function renderPosts(postsToRender) {
+    articlesContainer.innerHTML = '';
+    if (postsToRender.length === 0) {
+        articlesContainer.innerHTML = '<div class="loading-state">Ничего нет.</div>'; 
+        return;
+    }
+
+    postsToRender.forEach(post => {
+        const articleEl = document.createElement('article');
+        articleEl.className = 'article-card glass-card';
+        
+        const dateObj = new Date(post.created_at);
+        const formattedDate = dateObj.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+
+        // Логика обрезки текста
+        const maxLength = 300; // Количество символов для превью
+        let bodyPreview = escapeHtml(post.body_text);
+        let readMoreButton = '';
+
+        if (post.body_text.length > maxLength) {
+            bodyPreview = bodyPreview.substring(0, maxLength) + '...';
+            readMoreButton = `<button class="read-more-btn" onclick="openFullPost('${post.id}')">Читать далее →</button>`;
         }
 
-        postsToRender.forEach(post => {
-            const articleEl = document.createElement('article');
-            articleEl.className = 'article-card glass-card';
-            
-            const dateObj = new Date(post.created_at);
-            const formattedDate = dateObj.toLocaleDateString('ru-RU');
+        const tagsHtml = post.tags_array.map(tag => 
+            `<span class="tag-pill" onclick="applyTagFilter('${tag}')">#${tag}</span>`
+        ).join('');
 
-            const tagsHtml = post.tags_array.map(tag => 
-                `<span class="tag-pill" onclick="applyTagFilter('${tag}')">#${tag}</span>`
-            ).join('');
+        const heartSvg = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
 
-            const heartSvg = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+        articleEl.innerHTML = `
+            <div class="article-header">
+                <h3 class="article-title">${escapeHtml(post.title)}</h3>
+                <span class="article-date">${formattedDate}</span>
+            </div>
+            <div class="article-body">
+                <p>${bodyPreview}</p>
+                ${readMoreButton}
+            </div>
+            <div class="article-meta">
+                <div class="tags-list">${tagsHtml}</div>
+                <button class="like-btn" data-post-id="${post.id}" onclick="window.handleLikeClick('${post.id}', this)">
+                    ${heartSvg} <span class="like-count">${post.like_count}</span>
+                </button>
+            </div>
+        `;
+        articlesContainer.appendChild(articleEl);
+    });
+}
 
-            articleEl.innerHTML = `
-                <div class="article-header">
-                    <h3 class="article-title">${escapeHtml(post.title)}</h3>
-                    <span class="article-date">${formattedDate}</span>
-                </div>
-                <div class="article-body"><p>${escapeHtml(post.body_text)}</p></div>
-                <div class="article-meta">
-                    <div class="tags-list">${tagsHtml}</div>
-                    <button class="like-btn" data-post-id="${post.id}" onclick="window.handleLikeClick('${post.id}', this)">
-                        ${heartSvg} <span class="like-count">${post.like_count}</span>
-                    </button>
-                </div>
-            `;
-            articlesContainer.appendChild(articleEl);
-        });
-    }
+// Функция открытия полного поста
+window.openFullPost = function(postId) {
+    const post = currentPosts.find(p => p.id === postId);
+    if (!post) return;
+
+    currentFullPost = post;
+    
+    document.getElementById('fullPostTitle').textContent = post.title;
+    document.getElementById('fullPostDate').textContent = new Date(post.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute:'2-digit' });
+    document.getElementById('fullPostBody').textContent = post.body_text; // Используем textContent для безопасности
+    
+    // Рендерим теги в модалке
+    const tagsContainer = document.getElementById('fullPostTags');
+    tagsContainer.innerHTML = post.tags_array.map(tag => 
+        `<span class="tag-pill" onclick="applyTagFilter('${tag}'); closePostModal();">#${tag}</span>`
+    ).join('');
+
+    document.getElementById('postModal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+};
+
+// Закрытие окна поста
+function closePostModal() {
+    document.getElementById('postModal').classList.add('hidden');
+    document.body.style.overflow = '';
+    currentFullPost = null;
+}
+
+// Привязываем кнопку закрытия
+document.getElementById('closePostBtn').addEventListener('click', closePostModal);
+document.getElementById('postModal').addEventListener('click', (e) => {
+    if(e.target.id === 'postModal') closePostModal();
+});
 
     window.applyTagFilter = function(tag) {
         tagSearchInput.value = '#' + tag;
