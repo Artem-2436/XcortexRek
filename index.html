@@ -350,50 +350,69 @@
             }
 
             async function submitNewPost() {
-                const fullName = document.getElementById('fullName').value.trim();
-                const email = document.getElementById('email').value.trim().toLowerCase();
-                const title = document.getElementById('postTitle').value.trim();
-                const adType = document.getElementById('adType').value;
-                const rawTags = document.getElementById('tagsInput').value.trim();
-                const bodyText = document.getElementById('statementText').value.trim();
+    const fullName = document.getElementById('fullName').value.trim();
+    const email = document.getElementById('email').value.trim().toLowerCase();
+    const title = document.getElementById('postTitle').value.trim();
+    const adType = document.getElementById('adType').value; // Пока не сохраняем в БД, но можно добавить колонку
+    const rawTags = document.getElementById('tagsInput').value.trim();
+    const bodyText = document.getElementById('statementText').value.trim();
 
-                if(!fullName || !email || !title || !rawTags || !bodyText) {
-                    alert("Заполните все поля");
-                    return;
+    if(!fullName || !email || !title || !rawTags || !bodyText) {
+        alert("Заполните все обязательные поля (*)");
+        return;
+    }
+
+    const tagsArray = rawTags.split(',')
+        .map(t => t.trim().replace(/^#+/, '').toLowerCase())
+        .filter(t => t.length > 0);
+
+    if(tagsArray.length === 0) {
+        alert("Введите хотя бы один корректный тег");
+        return;
+    }
+
+    localStorage.setItem('xc_rek_user_email', email);
+    currentUserEmail = email;
+
+    const btn = applicationForm.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.innerText = "Отправка...";
+
+    try {
+        // Отправляем данные с явным указанием author_email
+        const { data, error } = await supabaseClient
+            .from('xc_rek_content_vault')
+            .insert([
+                {
+                    author_email: email,      // <-- Ключевое изменение
+                    title: title,
+                    body_text: bodyText,
+                    tags_array: tagsArray,
+                    like_count: 0,       
+                    is_approved: true   
                 }
+            ])
+            .select();
 
-                const tagsArray = rawTags.split(',')
-                    .map(t => t.trim().replace(/^#+/, '').toLowerCase())
-                    .filter(t => t.length > 0);
+        if (error) throw error;
 
-                if(tagsArray.length === 0) {
-                    alert("Введите хотя бы один тег");
-                    return;
-                }
+        alert("✅ Заявление успешно опубликовано!");
+        closeModal();
+        applicationForm.reset();
+        loadPosts(); 
 
-                localStorage.setItem('xc_rek_user_email', email);
-                currentUserEmail = email;
-
-                const { data: postData, error: postError } = await supabaseClient
-                    .from('xc_rek_content_vault')
-                    .insert({
-                        title: title,
-                        body_text: bodyText,
-                        tags_array: tagsArray,
-                        like_count: 0,
-                        is_approved: true
-                    })
-                    .select();
-
-                if (postError) {
-                    alert("Ошибка при отправке: " + postError.message);
-                    return;
-                }
-
-                alert("Заявление успешно опубликовано!");
-                closeModal();
-                loadPosts();
-            }
+    } catch (err) {
+        console.error(err);
+        let errorMsg = err.message || "Неизвестная ошибка.";
+        if (errorMsg.includes("row-level security")) {
+            errorMsg += "\n💡 Проверьте политики RLS в Supabase.";
+        }
+        alert("❌ Ошибка:\n" + errorMsg);
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "Отправить в базу";
+    }
+}
 
             async function toggleLike(postId) {
                 if (!currentUserEmail) {
