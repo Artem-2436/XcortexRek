@@ -388,7 +388,7 @@
                     title: title,
                     body_text: bodyText,
                     tags_array: tagsArray,
-                    like_count: 1,       
+                    like_count: 0,       
                     is_approved: true   
                 }
             ])
@@ -429,7 +429,7 @@
                     .select('id')
                     .eq('post_id', postId)
                     .eq('user_email', currentUserEmail)
-                    .single();
+                    .maybeSingle();
 
                 if (checkErr && checkErr.code !== 'PGRST116') {
                      console.error(checkErr);
