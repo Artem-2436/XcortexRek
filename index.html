@@ -272,307 +272,290 @@
 
     <script>
         // === КОНФИГУРАЦИЯ SUPABASE ===
-        // ВСТАВЬ СЮДА СВОИ ДАННЫЕ ИЗ ПАНЕЛИ SUPABASE -> PROJECT SETTINGS -> API
-        const SUPABASE_URL = 'https://epklfzbvlqzarptpwsdn.supabase.co'; 
-        const SUPABASE_ANON_KEY = 'sb_publishable_aa5ojwVrZ7pfLE0ec0DV5w_p3Zk2fcn'; 
+const SUPABASE_URL = 'https://epklfzbvlqzarptpwsdn.supabase.co'; 
+const SUPABASE_ANON_KEY = 'sb_publishable_aa5ojwVrZ7pfLE0ec0DV5w_p3Zk2fcn'; 
 
-        // Проверка конфигурации
-        if (SUPABASE_URL.includes('YOUR_')) {
-            console.warn("⚠️ Внимание: Не забыл ли ты вставить свои ключи Supabase в script.js?");
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+document.addEventListener('DOMContentLoaded', () => {
+    const articlesContainer = document.getElementById('articlesContainer');
+    const openFormBtn = document.getElementById('openFormBtn');
+    const closeFormBtn = document.getElementById('closeFormBtn');
+    const formModal = document.getElementById('formModal');
+    const applicationForm = document.getElementById('applicationForm');
+    const tagSearchInput = document.getElementById('tagSearchInput');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    const searchStatus = document.getElementById('searchStatus');
+
+    let currentPosts = [];
+    let currentUserEmail = localStorage.getItem('xc_rek_user_email') || null;
+
+    // --- ИНИЦИАЛИЗАЦИЯ ---
+    initRealtime(); // Запускаем слушатели изменений
+    loadPosts();    // Первая загрузка данных
+
+    // --- UI EVENTS (Кнопки, модалка, поиск - без изменений) ---
+    
+    openFormBtn.addEventListener('click', () => {
+        formModal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+        applicationForm.reset();
+    });
+
+    closeFormBtn.addEventListener('click', closeModal);
+    formModal.addEventListener('click', (e) => {
+        if(e.target === formModal) closeModal();
+    });
+
+    function closeModal() {
+        formModal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    tagSearchInput.addEventListener('input', debounce(handleSearch, 300));
+    clearSearchBtn.addEventListener('click', () => {
+        tagSearchInput.value = '';
+        handleSearch();
+    });
+
+    applicationForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await submitNewPost();
+    });
+
+    // --- REALTIME LOGIC (НОВОЕ!) ---
+
+    function initRealtime() {
+        console.log("🔴 Подключение к Realtime каналу...");
+
+        const channel = supabaseClient.channel('xcortex-rek-feed')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'xc_rek_content_vault' }, payload => {
+                console.log('Изменение в постах:', payload);
+                
+                // Если это INSERT (новый пост) или UPDATE (одобрение модератором)
+                if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                    refreshFeedSilently(); // Тихо обновляем ленту
+                }
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'xc_rek_engagement_log' }, payload => {
+                console.log('Изменение в лайках:', payload);
+                
+                // При любом изменении лайков (INSERT/DELETE) обновляем счетчики
+                // Чтобы не перегружать сеть, можно обновить только конкретный пост, но проще обновить весь массив
+                refreshFeedSilently(); 
+            })
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log("✅ Realtime успешно подключен!");
+                } else if (status === 'CHANNEL_ERROR') {
+                    console.error("❌ Ошибка канала Realtime. Проверьте SQL Publication.");
+                }
+            });
+    }
+
+    // Функция тихой перезагрузки данных (без лоадера посередине экрана)
+    async function refreshFeedSilently() {
+        try {
+            const { data, error } = await supabaseClient
+                .from('xc_rek_content_vault')
+                .select('*')
+                .eq('is_approved', true)
+                .order('like_count', { ascending: false })
+                .order('created_at', { ascending: false });
+
+            if (!error && data) {
+                currentPosts = data;
+                renderPosts(currentPosts); // Перерисовываем HTML
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    // --- ЛОГИКА БАЗЫ ДАННЫХ ---
+
+    async function loadPosts() {
+        articlesContainer.innerHTML = '<div class="loading-state">Загрузка...</div>';
+        
+        try {
+            const { data, error } = await supabaseClient
+                .from('xc_rek_content_vault')
+                .select('*')
+                .eq('is_approved', true)
+                .order('like_count', { ascending: false })
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            currentPosts = data || [];
+            renderPosts(currentPosts);
+        } catch (err) {
+            console.error(err);
+            articlesContainer.innerHTML = `<div class="error-message">Ошибка загрузки данных: ${err.message}</div>`;
+        }
+    }
+
+    async function submitNewPost() {
+        const fullName = document.getElementById('fullName').value.trim();
+        const email = document.getElementById('email').value.trim().toLowerCase();
+        const title = document.getElementById('postTitle').value.trim();
+        const rawTags = document.getElementById('tagsInput').value.trim();
+        const bodyText = document.getElementById('statementText').value.trim();
+
+        if(!fullName || !email || !title || !rawTags || !bodyText) {
+            alert("Заполните все поля"); return;
         }
 
-        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const tagsArray = rawTags.split(',')
+            .map(t => t.trim().replace(/^#+/, '').toLowerCase())
+            .filter(t => t.length > 0);
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const articlesContainer = document.getElementById('articlesContainer');
-            const openFormBtn = document.getElementById('openFormBtn');
-            const closeFormBtn = document.getElementById('closeFormBtn');
-            const formModal = document.getElementById('formModal');
-            const applicationForm = document.getElementById('applicationForm');
-            const tagSearchInput = document.getElementById('tagSearchInput');
-            const clearSearchBtn = document.getElementById('clearSearchBtn');
-            const searchStatus = document.getElementById('searchStatus');
+        if(tagsArray.length === 0) {
+            alert("Введите теги"); return;
+        }
 
-            let currentPosts = [];
-            let currentUserEmail = localStorage.getItem('xc_rek_user_email') || null;
+        localStorage.setItem('xc_rek_user_email', email);
+        currentUserEmail = email;
 
-            loadPosts();
+        const btn = applicationForm.querySelector('button[type="submit"]');
+        btn.disabled = true; btn.innerText = "Отправка...";
 
-            // UI Events
-            openFormBtn.addEventListener('click', () => {
-                formModal.classList.remove('hidden');
-                document.body.style.overflow = 'hidden';
-                applicationForm.reset();
-            });
-
-            closeFormBtn.addEventListener('click', closeModal);
-            formModal.addEventListener('click', (e) => {
-                if(e.target === formModal) closeModal();
-            });
-
-            function closeModal() {
-                formModal.classList.add('hidden');
-                document.body.style.overflow = '';
-            }
-
-            tagSearchInput.addEventListener('input', debounce(handleSearch, 300));
-            clearSearchBtn.addEventListener('click', () => {
-                tagSearchInput.value = '';
-                handleSearch();
-            });
-
-            applicationForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                await submitNewPost();
-            });
-
-            // Logic Functions
-            
-            async function loadPosts() {
-                articlesContainer.innerHTML = '<div class="loading-state">Загрузка...</div>';
-                
-                try {
-                    const { data, error } = await supabaseClient
-                        .from('xc_rek_content_vault')
-                        .select('*')
-                        .eq('is_approved', true)
-                        .order('like_count', { ascending: false })
-                        .order('created_at', { ascending: false });
-
-                    if (error) throw error;
-
-                    currentPosts = data || [];
-                    renderPosts(currentPosts);
-                } catch (err) {
-                    console.error(err);
-                    articlesContainer.innerHTML = `<div class="error-message">Ошибка подключения к базе данных:<br>${err.message}<br><br>Проверьте URL и Anon Key в коде.</div>`;
-                }
-            }
-
-            async function submitNewPost() {
-    const fullName = document.getElementById('fullName').value.trim();
-    const email = document.getElementById('email').value.trim().toLowerCase();
-    const title = document.getElementById('postTitle').value.trim();
-    const adType = document.getElementById('adType').value; // Пока не сохраняем в БД, но можно добавить колонку
-    const rawTags = document.getElementById('tagsInput').value.trim();
-    const bodyText = document.getElementById('statementText').value.trim();
-
-    if(!fullName || !email || !title || !rawTags || !bodyText) {
-        alert("Заполните все обязательные поля (*)");
-        return;
-    }
-
-    const tagsArray = rawTags.split(',')
-        .map(t => t.trim().replace(/^#+/, '').toLowerCase())
-        .filter(t => t.length > 0);
-
-    if(tagsArray.length === 0) {
-        alert("Введите хотя бы один корректный тег");
-        return;
-    }
-
-    localStorage.setItem('xc_rek_user_email', email);
-    currentUserEmail = email;
-
-    const btn = applicationForm.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    btn.innerText = "Отправка...";
-
-    try {
-        // Отправляем данные с явным указанием author_email
-        const { data, error } = await supabaseClient
-            .from('xc_rek_content_vault')
-            .insert([
-                {
-                    author_email: email,      // <-- Ключевое изменение
+        try {
+            const { error } = await supabaseClient
+                .from('xc_rek_content_vault')
+                .insert({
+                    author_email: email,
                     title: title,
                     body_text: bodyText,
                     tags_array: tagsArray,
-                    like_count: 0,       
-                    is_approved: true   
-                }
-            ])
-            .select();
+                    like_count: 0,
+                    is_approved: true
+                });
 
-        if (error) throw error;
+            if (error) throw error;
 
-        alert("✅ Заявление успешно опубликовано!");
-        closeModal();
-        applicationForm.reset();
-        loadPosts(); 
-
-    } catch (err) {
-        console.error(err);
-        let errorMsg = err.message || "Неизвестная ошибка.";
-        if (errorMsg.includes("row-level security")) {
-            errorMsg += "\n💡 Проверьте политики RLS в Supabase.";
-        }
-        alert("❌ Ошибка:\n" + errorMsg);
-    } finally {
-        btn.disabled = false;
-        btn.innerText = "Отправить в базу";
-    }
-}
-
-            async function toggleLike(postId) {
-    if (!currentUserEmail) {
-        alert("Для оценки необходимо сначала отправить заявление (указать email).");
-        return;
-    }
-
-    const button = document.querySelector(`button[data-post-id="${postId}"]`);
-    const countSpan = button.querySelector('.like-count');
-    const originalCount = parseInt(countSpan.textContent);
-
-    try {
-        // Проверяем, есть ли уже лайк от этого пользователя на этом посте
-        const { data: existingLike, error: checkErr } = await supabaseClient
-            .from('xc_rek_engagement_log')
-            .select('id')
-            .eq('post_id', postId)
-            .eq('user_email', currentUserEmail)
-            .single();
-
-        // Если ошибка не "не найдено", то реальная проблема
-        if (checkErr && checkErr.code !== 'PGRST116') {
-             console.error(checkErr);
-             throw checkErr;
-        }
-
-        if (existingLike) {
-            // --- СНИМАЕМ ЛАЙК ---
-            const { error: delErr } = await supabaseClient
-                .from('xc_rek_engagement_log')
-                .delete()
-                .eq('id', existingLike.id);
+            alert("✅ Опубликовано! (Появится у всех через секунду)");
+            closeModal();
+            applicationForm.reset();
+            // Не вызываем loadPosts(), так как Realtime сам обновит экран!
             
-            if(delErr) throw delErr;
-            
-            // Обновляем UI
-            button.classList.remove('active');
-            countSpan.textContent = Math.max(0, originalCount - 1);
-        } else {
-            // --- СТАВИМ ЛАЙК ---
-            const { error: insErr } = await supabaseClient
-                .from('xc_rek_engagement_log')
-                .insert({
-                    post_id: postId,
-                    user_email: currentUserEmail
-                });
-
-            if(insErr) throw insErr;
-
-            // Обновляем UI
-            button.classList.add('active');
-            countSpan.textContent = originalCount + 1;
+        } catch (err) {
+            alert("❌ Ошибка: " + err.message);
+        } finally {
+            btn.disabled = false; btn.innerText = "Отправить в базу";
         }
-        
-    } catch (err) {
-        console.error("Ошибка лайка:", err);
-        alert("Не удалось изменить оценку: " + err.message);
     }
-}
 
-            function renderPosts(postsToRender) {
-                articlesContainer.innerHTML = '';
+    async function toggleLike(postId) {
+        if (!currentUserEmail) {
+            alert("Сначала отправьте заявление с вашим Email."); return;
+        }
 
-                if (postsToRender.length === 0) {
-                    articlesContainer.innerHTML = '<div class="loading-state">Ничего не найдено. Будьте первым!</div>';
-                    return;
-                }
+        const button = document.querySelector(`button[data-post-id="${postId}"]`);
+        const countSpan = button.querySelector('.like-count');
+        const originalCount = parseInt(countSpan.textContent);
 
-                postsToRender.forEach(post => {
-                    const articleEl = document.createElement('article');
-                    articleEl.className = 'article-card glass-card';
-                    
-                    const dateObj = new Date(post.created_at);
-                    const formattedDate = dateObj.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
+        try {
+            const { data: existingLike, error: checkErr } = await supabaseClient
+                .from('xc_rek_engagement_log')
+                .select('id')
+                .eq('post_id', postId)
+                .eq('user_email', currentUserEmail)
+                .single();
 
-                    const tagsHtml = post.tags_array.map(tag => 
-                        `<span class="tag-pill" onclick="applyTagFilter('${tag}')">#${tag}</span>`
-                    ).join('');
+            if (checkErr && checkErr.code !== 'PGRST116') throw checkErr;
 
-                    const heartSvg = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
-
-                    articleEl.innerHTML = `
-                        <div class="article-header">
-                            <h3 class="article-title">${escapeHtml(post.title)}</h3>
-                            <span class="article-date">${formattedDate}</span>
-                        </div>
-                        <div class="article-body">
-                            <p>${escapeHtml(post.body_text)}</p>
-                        </div>
-                        <div class="article-meta">
-                            <div class="tags-list">
-                                ${tagsHtml}
-                            </div>
-                            <button class="like-btn" data-post-id="${post.id}" onclick="window.handleLikeClick('${post.id}', this)">
-                                ${heartSvg}
-                                <span class="like-count">${post.like_count}</span>
-                            </button>
-                        </div>
-                    `;
-                    articlesContainer.appendChild(articleEl);
-                });
+            if (existingLike) {
+                await supabaseClient.from('xc_rek_engagement_log').delete().eq('id', existingLike.id);
+                // UI обновление произойдет через Realtime listener, но для скорости сделаем локально:
+                button.classList.remove('active');
+                countSpan.textContent = Math.max(0, originalCount - 1);
+            } else {
+                await supabaseClient.from('xc_rek_engagement_log').insert({ post_id: postId, user_email: currentUserEmail });
+                button.classList.add('active');
+                countSpan.textContent = originalCount + 1;
             }
+        } catch (err) {
+            console.error(err);
+            alert("Ошибка лайка: " + err.message);
+        }
+    }
 
-            window.applyTagFilter = function(tag) {
-                tagSearchInput.value = '#' + tag;
-                handleSearch();
-            };
+    // --- РЕНДЕРИНГ И УТИЛИТЫ (Без изменений) ---
 
-            window.handleLikeClick = function(postId, btnElement) {
-                toggleLike(postId);
-            };
+    function renderPosts(postsToRender) {
+        articlesContainer.innerHTML = '';
+        if (postsToRender.length === 0) {
+            articlesContainer.innerHTML = '<div class="loading-state">Ничего нет.</div>'; return;
+        }
 
-            function handleSearch() {
-                const query = tagSearchInput.value.toLowerCase().trim();
-                
-                if (query === '') {
-                    showAllPosts();
-                    return;
-                }
+        postsToRender.forEach(post => {
+            const articleEl = document.createElement('article');
+            articleEl.className = 'article-card glass-card';
+            
+            const dateObj = new Date(post.created_at);
+            const formattedDate = dateObj.toLocaleDateString('ru-RU');
 
-                const cleanQuery = query.replace(/#/g, '').trim();
-                
-                if (!cleanQuery) {
-                    showAllPosts();
-                    return;
-                }
+            const tagsHtml = post.tags_array.map(tag => 
+                `<span class="tag-pill" onclick="applyTagFilter('${tag}')">#${tag}</span>`
+            ).join('');
 
-                const filtered = currentPosts.filter(post => {
-                    return post.tags_array.some(tag => tag.includes(cleanQuery));
-                });
+            const heartSvg = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
 
-                searchStatus.textContent = `Найдено совпадений: ${filtered.length}`;
-                clearSearchBtn.classList.remove('hidden');
-                renderPosts(filtered);
-            }
-
-            function showAllPosts() {
-                searchStatus.textContent = '';
-                clearSearchBtn.classList.add('hidden');
-                renderPosts(currentPosts);
-            }
-
-            function escapeHtml(text) {
-                if (!text) return "";
-                return text
-                    .replace(/&/g, "&amp;")
-                    .replace(/</g, "&lt;")
-                    .replace(/>/g, "&gt;")
-                    .replace(/"/g, "&quot;")
-                    .replace(/'/g, "&#039;");
-            }
-
-            function debounce(func, wait) {
-                let timeout;
-                return function(...args) {
-                    clearTimeout(timeout);
-                    timeout = setTimeout(() => func.apply(this, args), wait);
-                };
-            }
+            articleEl.innerHTML = `
+                <div class="article-header">
+                    <h3 class="article-title">${escapeHtml(post.title)}</h3>
+                    <span class="article-date">${formattedDate}</span>
+                </div>
+                <div class="article-body"><p>${escapeHtml(post.body_text)}</p></div>
+                <div class="article-meta">
+                    <div class="tags-list">${tagsHtml}</div>
+                    <button class="like-btn" data-post-id="${post.id}" onclick="window.handleLikeClick('${post.id}', this)">
+                        ${heartSvg} <span class="like-count">${post.like_count}</span>
+                    </button>
+                </div>
+            `;
+            articlesContainer.appendChild(articleEl);
         });
+    }
+
+    window.applyTagFilter = function(tag) {
+        tagSearchInput.value = '#' + tag;
+        handleSearch();
+    };
+
+    window.handleLikeClick = function(postId, btnElement) {
+        toggleLike(postId);
+    };
+
+    function handleSearch() {
+        const query = tagSearchInput.value.toLowerCase().trim();
+        if (query === '') { showAllPosts(); return; }
+        const cleanQuery = query.replace(/#/g, '').trim();
+        if (!cleanQuery) { showAllPosts(); return; }
+
+        const filtered = currentPosts.filter(post => post.tags_array.some(tag => tag.includes(cleanQuery)));
+        searchStatus.textContent = `Найдено: ${filtered.length}`;
+        clearSearchBtn.classList.remove('hidden');
+        renderPosts(filtered);
+    }
+
+    function showAllPosts() {
+        searchStatus.textContent = '';
+        clearSearchBtn.classList.add('hidden');
+        renderPosts(currentPosts);
+    }
+
+    function escapeHtml(text) {
+        if (!text) return "";
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    function debounce(func, wait) {
+        let timeout;
+        return function(...args) { clearTimeout(timeout); timeout = setTimeout(() => func.apply(this, args), wait); };
+    }
+});
     </script>
 </body>
 </html>
