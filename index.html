@@ -4,27 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>XcortexRek - Заявления и Самореклама</title>
-    <!-- Подключение шрифтов Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <!-- Подключение стилей -->
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <!-- Шапка сайта -->
     <header class="site-header glass-panel">
         <div class="container header-content">
             <h1 class="logo">Xcortex<span class="accent">Rek</span></h1>
             <nav class="main-nav">
                 <a href="#info" class="nav-link">Инфо</a>
-                <a href="#articles" class="nav-link">Статьи</a>
+                <a href="#feed" class="nav-link">Лента</a>
             </nav>
         </div>
     </header>
 
-    <!-- Основной контент -->
     <main class="container">
         
         <!-- Информационный блок -->
@@ -33,72 +31,38 @@
                 <p class="intro-text">
                     Всем здравствуйте! Это информационный сайт <strong>XcortexRek</strong>!<br><br>
                     Здесь вы можете размещать и заявлять о себе.<br>
-                    Для того чтобы добавить свое описание/заявление, нужно нажать ниже красную кнопочку "<strong>заполнить анкету</strong>".<br>
-                    После нее вы должны будете заполнить анкету, и нажать "<strong>отправить</strong>", после чего ваша самореклама будет отправлена на модерацию.<br>
-                    Модерация занимает примерно от 1 часа до недели.
+                    Нажмите красную кнопку ниже, чтобы создать запись. Записи с наибольшим количеством лайков поднимаются вверх ленты.
                 </p>
                 <button id="openFormBtn" class="btn btn-primary pulse-animation">
-                    Заполнить анкету
+                    Создать заявление
                 </button>
             </div>
         </section>
 
-        <!-- Секция статей -->
-        <section id="articles" class="articles-section">
-            <h2 class="section-title">Последние заявления / Примеры</h2>
-            
-            <!-- Статья 1: Пример -->
-            <article class="article-card glass-card">
-                <div class="article-header">
-                    <h3 class="article-title">(Xcortex)</h3>
-                    <span class="article-date">08.11.2026</span>
-                </div>
-                <div class="article-body">
-                    <p>Здесь будет ваш текст...</p>
-                </div>
-                <div class="article-footer">
-                    <p class="links-label">Ссылки на проекты:</p>
-                    <div class="project-links">
-                        <a href="https://artem-2436.github.io/Xcortex/" target="_blank" class="btn btn-secondary small-btn">Xcortex Project</a>
-                        <a href="https://artem-2436.github.io/asinhrom.224/" target="_blank" class="btn btn-secondary small-btn">Asinhrom Brand</a>
-                    </div>
-                </div>
-            </article>
+        <!-- Секция Поиска -->
+        <section id="search-section" class="search-container glass-card">
+            <div class="search-wrapper">
+                <input type="text" id="tagSearchInput" placeholder="Поиск по тегу (например: #internet)...">
+                <button id="clearSearchBtn" class="icon-btn clear-search hidden" title="Очистить">&times;</button>
+            </div>
+            <div id="searchStatus" class="search-status"></div>
+        </section>
 
-            <!-- 
-            ШАБЛОН ДЛЯ КОПИРОВАНИЯ (РАСКОММЕНТИРУЙ И ИЗМЕНИ ТЕКСТ):
-            
-            <article class="article-card glass-card">
-                <div class="article-header">
-                    <h3 class="article-title">(Название Бренда или Имя)</h3>
-                    <span class="article-date">ДД.ММ.ГГГГ</span>
-                </div>
-                <div class="article-body">
-                    <p>Текст вашего заявления или рекламы...</p>
-                </div>
-                <div class="article-footer">
-                    <p class="links-label">Ссылки на проекты:</p>
-                    <div class="project-links">
-                        <a href="#" target="_blank" class="btn btn-secondary small-btn">Проект 1</a>
-                        <a href="#" target="_blank" class="btn btn-secondary small-btn">Проект 2</a>
-                    </div>
-                </div>
-            </article>
-            -->
-
+        <!-- Лента статей -->
+        <section id="feed" class="articles-section">
+            <h2 class="section-title">Популярные заявления</h2>
+            <div id="articlesContainer" class="articles-grid">
+                <!-- Статьи будут загружены сюда через JS -->
+                <div class="loading-state">Загрузка контента...</div>
+            </div>
         </section>
 
     </main>
 
-    <!-- Футер -->
     <footer class="site-footer glass-panel">
         <div class="container footer-content">
-            <p>&copy; 2026 XcortexRek. Все права защищены.</p>
-            <p class="legal-disclaimer">
-                Данный ресурс предназначен для публикации личных заявлений и саморекламы. 
-                Администрация не несет ответственности за достоверность предоставленной информации.
-                Любые нарушения законодательства РФ преследуются по закону.
-            </p>
+            <p>&copy; 2026 XcortexRek. Powered by Asinhrom & Xcortex.</p>
+            <p class="legal-disclaimer">Администрация не несет ответственности за содержание публикаций.</p>
         </div>
     </footer>
 
@@ -109,37 +73,47 @@
             <h2 class="modal-title">Новое заявление</h2>
             
             <form id="applicationForm">
-                <div class="form-group">
-                    <label for="fullName">ФИО *</label>
-                    <input type="text" id="fullName" required placeholder="Иванов Иван Иванович">
+                <div class="form-row">
+                    <div class="form-group half">
+                        <label for="fullName">ФИО *</label>
+                        <input type="text" id="fullName" required placeholder="Имя Фамилия">
+                    </div>
+                    <div class="form-group half">
+                        <label for="email">Email *</label>
+                        <input type="email" id="email" required placeholder="mail@example.com">
+                    </div>
                 </div>
 
                 <div class="form-group">
-                    <label for="email">Email *</label>
-                    <input type="email" id="email" required placeholder="example@mail.ru">
+                    <label for="postTitle">Заголовок заявления *</label>
+                    <input type="text" id="postTitle" required placeholder="Например: Ищу друзей по интересам">
                 </div>
 
                 <div class="form-group">
                     <label for="adType">Тип саморекламы *</label>
                     <select id="adType" required>
                         <option value="" disabled selected>Выберите тип...</option>
-                        <option value="self_statement">Заявление о себе / Поиск друзей</option>
-                        <option value="brand_ad">Самореклама бренда</option>
+                        <option value="statement">Заявление о себе / Поиск друзей</option>
+                        <option value="brand">Самореклама бренда</option>
                     </select>
                 </div>
 
                 <div class="form-group">
-                    <label for="statementText">Текст заявления *</label>
-                    <textarea id="statementText" rows="8" required placeholder="Введите ваше сообщение... (максимум 50 предложений)" maxlength="3000"></textarea>
-                    <small class="char-counter"><span id="currentChars">0</span>/3000 символов (~50 предл.)</small>
+                    <label for="tagsInput">Теги (через запятую) *</label>
+                    <input type="text" id="tagsInput" required placeholder="internet, gaming, art">
+                    <small class="hint">Не используйте символ # в поле ввода, система добавит его автоматически при отображении.</small>
                 </div>
 
-                <button type="submit" class="btn btn-submit full-width">Отправить на модерацию</button>
+                <div class="form-group">
+                    <label for="statementText">Текст заявления *</label>
+                    <textarea id="statementText" rows="6" required placeholder="Расскажите подробнее..."></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-submit full-width">Отправить в базу</button>
             </form>
         </div>
     </div>
 
-    <!-- Подключение скриптов -->
     <script src="script.js"></script>
 </body>
 </html>
