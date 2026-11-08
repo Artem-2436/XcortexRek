@@ -557,5 +557,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
     </script>
+    <!-- Модальное окно для полного текста поста -->
+<div id="postModal" class="modal-overlay hidden">
+    <div class="modal-content glass-card post-modal-content">
+        <button id="closePostBtn" class="close-modal-btn">&times;</button>
+        <h2 id="fullPostTitle" class="modal-title"></h2>
+        <div class="post-meta-info">
+            <span id="fullPostDate" class="article-date"></span>
+            <div id="fullPostTags" class="tags-list" style="margin-top: 5px;"></div>
+        </div>
+        <div id="fullPostBody" class="full-post-body"></div>
+    </div>
+</div>
 </body>
 </html>
