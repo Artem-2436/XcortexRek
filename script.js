@@ -1,7 +1,7 @@
 // === КОНФИГУРАЦИЯ SUPABASE ===
 // ВСТАВЬ СЮДА СВОИ ДАННЫЕ ИЗ ПАНЕЛИ SUPABASE -> PROJECT SETTINGS -> API
-const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co'; 
-const SUPABASE_ANON_KEY = 'YOUR_ANON_PUBLIC_KEY_HERE'; 
+const SUPABASE_URL = 'https://epklfzbvlqzarptpwsdn.supabase.co'; 
+const SUPABASE_ANON_KEY = 'sb_publishable_aa5ojwVrZ7pfLE0ec0DV5w_p3Zk2fcn'; 
 
 // Инициализация клиента
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
