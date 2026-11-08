@@ -415,51 +415,63 @@
 }
 
             async function toggleLike(postId) {
-                if (!currentUserEmail) {
-                    alert("Для оценки необходимо сначала отправить заявление (указать email).");
-                    return;
-                }
+    if (!currentUserEmail) {
+        alert("Для оценки необходимо сначала отправить заявление (указать email).");
+        return;
+    }
 
-                const button = document.querySelector(`button[data-post-id="${postId}"]`);
-                const countSpan = button.querySelector('.like-count');
-                const originalCount = parseInt(countSpan.textContent);
+    const button = document.querySelector(`button[data-post-id="${postId}"]`);
+    const countSpan = button.querySelector('.like-count');
+    const originalCount = parseInt(countSpan.textContent);
 
-                const { data: existingLike, error: checkErr } = await supabaseClient
-                    .from('xc_rek_engagement_log')
-                    .select('id')
-                    .eq('post_id', postId)
-                    .eq('user_email', currentUserEmail)
-                    .maybeSingle();
+    try {
+        // Проверяем, есть ли уже лайк от этого пользователя на этом посте
+        const { data: existingLike, error: checkErr } = await supabaseClient
+            .from('xc_rek_engagement_log')
+            .select('id')
+            .eq('post_id', postId)
+            .eq('user_email', currentUserEmail)
+            .single();
 
-                if (checkErr && checkErr.code !== 'PGRST116') {
-                     console.error(checkErr);
-                     return;
-                }
+        // Если ошибка не "не найдено", то реальная проблема
+        if (checkErr && checkErr.code !== 'PGRST116') {
+             console.error(checkErr);
+             throw checkErr;
+        }
 
-                if (existingLike) {
-                    const { error: delErr } = await supabaseClient
-                        .from('xc_rek_engagement_log')
-                        .delete()
-                        .eq('id', existingLike.id);
-                    
-                    if(delErr) { alert("Ошибка удаления лайка"); return; }
-                    
-                    button.classList.remove('active');
-                    countSpan.textContent = Math.max(0, originalCount - 1);
-                } else {
-                    const { error: insErr } = await supabaseClient
-                        .from('xc_rek_engagement_log')
-                        .insert({
-                            post_id: postId,
-                            user_email: currentUserEmail
-                        });
+        if (existingLike) {
+            // --- СНИМАЕМ ЛАЙК ---
+            const { error: delErr } = await supabaseClient
+                .from('xc_rek_engagement_log')
+                .delete()
+                .eq('id', existingLike.id);
+            
+            if(delErr) throw delErr;
+            
+            // Обновляем UI
+            button.classList.remove('active');
+            countSpan.textContent = Math.max(0, originalCount - 1);
+        } else {
+            // --- СТАВИМ ЛАЙК ---
+            const { error: insErr } = await supabaseClient
+                .from('xc_rek_engagement_log')
+                .insert({
+                    post_id: postId,
+                    user_email: currentUserEmail
+                });
 
-                    if(insErr) { alert("Ошибка постановки лайка"); return; }
+            if(insErr) throw insErr;
 
-                    button.classList.add('active');
-                    countSpan.textContent = originalCount + 1;
-                }
-            }
+            // Обновляем UI
+            button.classList.add('active');
+            countSpan.textContent = originalCount + 1;
+        }
+        
+    } catch (err) {
+        console.error("Ошибка лайка:", err);
+        alert("Не удалось изменить оценку: " + err.message);
+    }
+}
 
             function renderPosts(postsToRender) {
                 articlesContainer.innerHTML = '';
